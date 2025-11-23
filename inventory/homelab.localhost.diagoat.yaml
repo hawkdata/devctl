@@ -1,0 +1,15 @@
+all:
+  hosts:
+    remote_server:
+      ansible_host: localhost  # Replace with your actual server IP or hostname
+      ansible_user: jaco      # Replace with your remote username
+      ansible_ssh_private_key_file: ~/.ssh/id_ed25519 # Optional: path to key
+  vars:
+    # 1. Location of the installer script on your LOCAL machine
+    miniforge_local_installer: "/arena/devctl.homelab/packages/Miniforge3-Linux-x86_64.sh"
+    
+    # 2. Where to install Miniforge on the REMOTE server
+    miniforge_install_dir: "/arena/spacesdev/miniforge3"
+    
+    # 3. Temporary location on REMOTE to upload the installer script
+    miniforge_tmp_path: "/arena/spacesdev/tmp/Miniforge3-Linux-x86_64.sh"

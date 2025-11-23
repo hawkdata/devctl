@@ -1,0 +1,75 @@
+---
+- name: Install Miniforge on Remote Server (Non-Root)
+  hosts: all
+  gather_facts: yes
+  
+  # Default variables (used if not defined in inventory)
+  #vars:
+  #  miniforge_local_installer: "~/Downloads/Miniforge3-Linux-x86_64.sh"
+  #  miniforge_install_dir: "{{ ansible_env.HOME }}/miniforge3"
+  #  miniforge_tmp_path: "/tmp/miniforge_installer.sh"
+
+  tasks:
+    - name: Print the variable
+      debug:
+        msg: "The value of miniforge_local_installer is: {{ miniforge_local_installer }}"
+
+
+    - name: Check if Miniforge is already installed
+      stat:
+        path: "{{ miniforge_install_dir }}"
+      register: miniforge_dir
+
+    - name: Fail if Miniforge is already installed (Idempotency check)
+      debug:
+        msg: "Miniforge directory already exists at {{ miniforge_install_dir }}. Skipping installation."
+      when: miniforge_dir.stat.exists
+
+
+    # ---------------------------------------------------------
+    # Create Temporary Directory
+    # The 'file' module with state: directory checks existence 
+    # and creates the directory (and parents) if missing.
+    # ---------------------------------------------------------
+    - name: Ensure directory for temporary installer exists
+      file:
+        path: "{{ miniforge_tmp_path | dirname }}"
+        state: directory
+        mode: '0755'
+      when: not miniforge_dir.stat.exists
+
+    
+
+    - name: Upload Miniforge installer to remote temporary path
+      copy:
+        src: "{{ miniforge_local_installer }}"
+        dest: "{{ miniforge_tmp_path }}"
+        mode: '0755' # Make it executable immediately
+      when: not miniforge_dir.stat.exists
+
+    - name: Run Miniforge Installer
+      command: >
+        {{ miniforge_tmp_path }}
+        -b
+        -p {{ miniforge_install_dir }}
+      when: not miniforge_dir.stat.exists
+      # Explanation of flags:
+      # -b : Batch mode (no manual interaction/license acceptance required)
+      # -p : Prefix (installation path)
+
+    - name: Remove temporary installer file
+      file:
+        path: "{{ miniforge_tmp_path }}"
+        state: absent
+
+    - name: Initialize Conda for Bash (Optional)
+      shell: "{{ miniforge_install_dir }}/bin/conda init bash"
+      args:
+        executable: /bin/bash
+      when: not miniforge_dir.stat.exists
+      # This modifies the user's .bashrc so conda is available in new sessions
+
+    - name: Display Success Message
+      debug:
+        msg: "Miniforge installed to {{ miniforge_install_dir }}. Please verify .bashrc or restart your shell."
+      when: not miniforge_dir.stat.exists
