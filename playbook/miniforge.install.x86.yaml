@@ -4,15 +4,11 @@
   gather_facts: yes
   
   # Default variables (used if not defined in inventory)
-  #vars:
-  #  miniforge_local_installer: "~/Downloads/Miniforge3-Linux-x86_64.sh"
-  #  miniforge_install_dir: "{{ ansible_env.HOME }}/miniforge3"
-  #  miniforge_tmp_path: "/tmp/miniforge_installer.sh"
 
   tasks:
-    - name: Print the variable
+    - name: Print the variables
       debug:
-        msg: "The value of miniforge_local_installer is: {{ miniforge_local_installer }}"
+        msg: "Package base: {{ package_base_dir }}, Relative path: {{ installer_relative_path }}, Filename: {{ installer_filename }}, Full path: {{ miniforge_local_installer }}"
 
 
     - name: Check if Miniforge is already installed

@@ -29,11 +29,19 @@ This set of scripts installs Miniforge to a remote Linux server without requirin
           ```
           .
           
-      26.   Ensure 
+      26.   Ensure the following variables are set correctly:
           ```
-          miniforge_local_installer
+          package_base_dir
           ```
-           points to the file you downloaded in step 1.
+          points to the base directory containing your packages (e.g., "~/packages"),
+          ```
+          installer_relative_path
+          ```
+          is the subdirectory path under package_base_dir (can be empty if installer is directly in package_base_dir), and
+          ```
+          installer_filename
+          ```
+          is the name of your installer file (e.g., "Miniforge3-Linux-x86_64.sh"). The full path will be constructed as package_base_dir + installer_relative_path + installer_filename.
           
       32.   Ensure 
           ```

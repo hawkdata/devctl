@@ -16,6 +16,11 @@
 ## passwordless login
 
 ```
+    sudo apt install openssh-server
+```
+
+
+```
 ssh-keygen -t ed25519
 ```
 

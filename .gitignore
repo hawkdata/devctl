@@ -1,0 +1,2 @@
+# Ignore inventory directories with .loc pattern
+inventory.loc.*

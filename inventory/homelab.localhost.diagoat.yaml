@@ -5,11 +5,23 @@ all:
       ansible_user: jaco      # Replace with your remote username
       ansible_ssh_private_key_file: ~/.ssh/id_ed25519 # Optional: path to key
   vars:
-    # 1. Location of the installer script on your LOCAL machine
-    miniforge_local_installer: "/arena/devctl.homelab/packages/Miniforge3-Linux-x86_64.sh"
-    
-    # 2. Where to install Miniforge on the REMOTE server
+    # 1. Location of the packages directory on your LOCAL machine
+    package_base_dir: "/arena/devctl.homelab/packages"  # Base directory for packages
+
+    # 2. Subdirectory path under package_base_dir (empty if installer is directly in package_base_dir)
+    installer_relative_path: ""  # Relative path from package_base_dir
+
+    # 3. Filename of the installer
+    installer_filename: "Miniforge3-Linux-x86_64.sh"  # Filename of the installer
+
+    # 4. Combined path for the installer (constructed from the three variables above)
+    miniforge_local_installer: "{{ package_base_dir }}/{{ installer_relative_path }}/{{ installer_filename }}"
+
+    # 5. Where to install Miniforge on the REMOTE server
     miniforge_install_dir: "/arena/spacesdev/miniforge3"
-    
-    # 3. Temporary location on REMOTE to upload the installer script
-    miniforge_tmp_path: "/arena/spacesdev/tmp/Miniforge3-Linux-x86_64.sh"
+
+    # 6. Base temporary directory on REMOTE server
+    tmp_base: "/arena/spacesdev/tmp"  # Base directory for temporary files
+
+    # 7. Temporary location on REMOTE to upload the installer script (constructed from tmp_base and installer_filename)
+    miniforge_tmp_path: "{{ tmp_base }}/{{ installer_filename }}"
