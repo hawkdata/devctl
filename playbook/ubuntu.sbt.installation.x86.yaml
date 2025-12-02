@@ -1,0 +1,114 @@
+---
+# Ansible playbook to install sbt (Scala Build Tool) from tar package on Ubuntu systems for non-root users
+#
+# This playbook:
+# 1. Copies sbt tar package from controller to remote node
+# 2. Extracts it to the user's directory
+# 3. Sets up the environment variables for sbt
+
+- name: Install sbt for non-root user
+  hosts: all
+  become: false  # Running as the target user, not root
+  gather_facts: yes
+
+  # Define default values that can be overridden in inventory
+  vars:
+    sbt_version: "1.11.7"  # Default sbt version to install
+    sbt_installer_filename: "sbt-{{ sbt_version }}.tgz"  # Name of sbt installer file
+    sbt_local_installer: "{{ package_base_dir  }}/{{ installer_relative_path  }}/{{ sbt_installer_filename }}"  # Path to sbt installer on controller, using package_base_dir and installer_relative_path from inventory
+
+
+
+  tasks:
+    - name: Check if sbt executable exists in installation directory
+      stat:
+        path: "{{ sbt_install_dir }}/sbt/bin/sbt"
+      register: sbt_binary_stat
+
+    - name: Display sbt already installed message and quit
+      debug:
+        msg: "sbt is already installed in {{ sbt_install_dir }}/sbt/bin/sbt"
+      when: sbt_binary_stat.stat.exists
+
+    - name: Exit playbook if sbt is already installed
+      meta: end_play
+      when: sbt_binary_stat.stat.exists
+
+    - name: Display sbt installation variables
+      debug:
+        msg: |
+          sbt installation parameters:
+          - Version: {{ sbt_version }}
+          - Installation directory: {{ sbt_install_dir }}
+          - Installer package: {{ sbt_local_installer }}
+          - Temporary directory: {{ tmp_base }}
+          - Current user: {{ ansible_user_id }}
+
+    - name: Create sbt installation directory
+      file:
+        path: "{{ sbt_install_dir }}"
+        state: directory
+        mode: '0755'
+      become: false
+
+    - name: Copy sbt tar package from controller to remote node
+      copy:
+        src: "{{ sbt_local_installer }}"
+        dest: "{{ tmp_base }}/{{ sbt_installer_filename }}"
+        mode: '0644'
+
+    - name: Extract sbt tar package to installation directory
+      unarchive:
+        src: "{{ tmp_base }}/{{ sbt_installer_filename }}"
+        dest: "{{ sbt_install_dir }}"
+        creates: "{{ sbt_install_dir }}/sbt/bin/sbt"
+        remote_src: false
+      become: false
+
+
+    - name: Ensure the sbt script is executable
+      file:
+        path: "{{ sbt_install_dir }}/sbt/bin/sbt"
+        mode: '0755'
+        state: file
+
+
+    - name: Add SBT_HOME environment variable to .bashrc
+      lineinfile:
+        dest: "{{ ansible_env.HOME }}/.bashrc"
+        line: 'export SBT_HOME="{{ sbt_install_dir }}/sbt"'
+        regexp: '^export SBT_HOME='
+        state: present
+        create: yes
+      become: false
+
+    - name: Add SBT_HOME/bin to PATH in .bashrc
+      lineinfile:
+        dest: "{{ ansible_env.HOME }}/.bashrc"
+        line: 'export PATH="$PATH:{{ sbt_install_dir }}/sbt/bin"'
+        regexp: '^export PATH=.*{{ sbt_install_dir }}/sbt/bin'
+        state: present
+        create: yes
+      become: false
+
+    - name: Source .bashrc to make changes effective in current session
+      shell: source ~/.bashrc
+      args:
+        executable: /bin/bash
+      become: false
+      ignore_errors: true
+
+    - name: Verify sbt installation
+      command: "{{ sbt_install_dir }}/sbt/bin/sbt -version"
+      register: sbt_version_output
+      changed_when: false
+      become: false
+
+    - name: Display sbt installation summary
+      debug:
+        msg: |
+          sbt installation summary for {{ ansible_hostname }}:
+          - Installed version: {{ sbt_version_output.stdout | default('Unknown') }}
+          - Installation directory: {{ sbt_install_dir }}/sbt
+          - Executable: {{ sbt_install_dir }}/sbt/bin/sbt
+          - SBT_HOME: {{ sbt_install_dir }}/sbt
