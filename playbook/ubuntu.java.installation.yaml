@@ -1,0 +1,77 @@
+---
+# Ansible playbook to install JDK on Ubuntu systems if not already installed
+#
+# This playbook checks if Java is installed and installs OpenJDK 11 if not present.
+
+- name: Install JDK on Ubuntu systems if not present
+  hosts: all
+  become: true  # Need sudo privileges to install packages
+  gather_facts: yes
+
+  tasks:
+    - name: Check if Java is installed
+      command: java -version
+      register: java_check
+      ignore_errors: true
+      changed_when: false
+
+    - name: Set Java installation status
+      set_fact:
+        java_installed: "{{ true if java_check.rc == 0 else false }}"
+
+    - name: Display Java installation status
+      debug:
+        msg: "Java is {{ 'already installed' if java_installed else 'not installed' }} on {{ ansible_hostname }}"
+
+    - name: Update apt cache if Java is not installed
+      apt:
+        update_cache: yes
+      when: not java_installed
+      register: apt_update
+
+    - name: Install OpenJDK 11 if Java is not installed
+      apt:
+        name: 
+          - openjdk-11-jdk
+          - openjdk-11-jre
+        state: present
+        update_cache: no  # We already updated the cache above
+      when: not java_installed
+      register: java_installation
+
+    - name: Install OpenJDK 17 as an alternative option
+      apt:
+        name: 
+          - openjdk-17-jdk
+          - openjdk-17-jre
+        state: present
+        update_cache: no
+      when: not java_installed
+      register: java_installation
+
+    - name: Get Java version after installation
+      command: java -version
+      register: java_version_after
+      when: not java_installed
+      changed_when: false
+
+    - name: Set JAVA_HOME environment variable in /etc/environment
+      lineinfile:
+        path: /etc/environment
+        line: 'JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64'
+        create: yes
+        state: present
+      when: not java_installed
+
+    - name: Verify Java installation
+      command: java -version
+      register: final_java_check
+      changed_when: false
+
+    - name: Display final installation summary
+      debug:
+        msg: |
+          Java installation summary for {{ ansible_hostname }}:
+          - Status: {{ 'Installed' if not java_installed else 'Already present' }}
+          - Version: {{ final_java_check.stderr.split('\n') | first if final_java_check.stderr else 'Unknown' }}
+          - JAVA_HOME: /usr/lib/jvm/java-11-openjdk-amd64

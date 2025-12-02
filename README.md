@@ -36,4 +36,10 @@ Test Passwordless SSH Login:
 
 
 
+##  Ask password when sudo
+```
+ansible-playbook -i your_inventory --ask-become-pass your.playbook.yaml
+```
+
+
 --- @end

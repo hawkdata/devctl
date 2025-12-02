@@ -1,0 +1,121 @@
+---
+# Ansible playbook to detect Java/JDK version and location information
+#
+# This playbook detects Java/JDK installations on remote servers,
+# showing version, location, and other relevant information.
+
+- name: Detect Java/JDK Information
+  hosts: all
+  become: false
+  gather_facts: yes
+
+  tasks:
+    - name: Check if Java is installed via 'java -version'
+      command: java -version
+      register: java_version_output
+      ignore_errors: true
+      changed_when: false
+
+    - name: Display Java version information
+      debug:
+        msg: |
+          Java version information:
+          {{ java_version_output.stderr | default('Java not found or error occurred') }}
+
+    - name: Find Java executable locations
+      find:
+        paths: 
+          - /usr/bin
+          - /usr/local/bin
+          - /opt
+          - /usr/lib/jvm
+          - /Library/Java/JavaVirtualMachines  # For macOS
+        patterns: 
+          - 'java'
+          - 'javac'
+          - 'jre*'
+          - 'jdk*'
+          - '*jdk*'
+        file_type: any
+      register: java_locations
+      failed_when: false
+
+    - name: List found Java executables and directories
+      debug:
+        msg: "Found Java-related files/directories: {{ item.path }}"
+      loop: "{{ java_locations.files }}"
+      when: java_locations.files is defined
+
+    - name: Check for JAVA_HOME environment variable
+      command: echo $JAVA_HOME
+      register: java_home
+      changed_when: false
+      failed_when: false
+
+    - name: Display JAVA_HOME
+      debug:
+        msg: "JAVA_HOME: {{ java_home.stdout | default('Not set') }}"
+
+    - name: Check for common Java installation paths
+      stat:
+        path: "{{ item }}"
+      register: java_paths
+      loop:
+        - /usr/lib/jvm
+        - /usr/java
+        - /opt/java
+        - /usr/local/lib/jvm
+        - /Library/Java/JavaVirtualMachines
+        - C:\Program Files\Java  # For Windows
+
+    - name: Display status of common Java directories
+      debug:
+        msg: "Directory {{ item.item }}: {{ 'exists' if item.stat.exists else 'does not exist' }}"
+      loop: "{{ java_paths.results }}"
+
+    - name: Get Java version from common locations
+      shell: "{{ item }}/bin/java -version 2>&1 | head -n 1"
+      register: java_versions_from_locations
+      loop:
+        - /usr/lib/jvm/default-java
+        - /usr/lib/jvm/java-8-openjdk-amd64
+        - /usr/lib/jvm/java-11-openjdk-amd64
+        - /usr/lib/jvm/java-17-openjdk-amd64
+        - /usr/lib/jvm/java-8-oracle
+        - /usr/lib/jvm/java-11-oracle
+        - /usr/lib/jvm/java-17-oracle
+      failed_when: false
+      changed_when: false
+
+    - name: Display Java versions from known locations
+      debug:
+        msg: "Java version at {{ item.item }}: {{ item.stdout if item.stdout else 'Not found' }}"
+      loop: "{{ java_versions_from_locations.results }}"
+
+    - name: Detect Java using alternatives (Linux)
+      command: update-alternatives --display java
+      register: alternatives_java
+      failed_when: false
+      changed_when: false
+
+    - name: Display alternatives for Java
+      debug:
+        msg: "Java alternatives: {{ alternatives_java.stdout if alternatives_java.stdout else 'No alternatives configured' }}"
+
+    - name: Gather final Java summary
+      set_fact:
+        java_summary: |
+          {% if java_version_output.rc == 0 %}
+          Java found on {{ ansible_hostname }}:
+          Version: {{ java_version_output.stderr.split('\n') | first if java_version_output.stderr else 'Unknown' }}
+          {% for java_file in java_locations.files | selectattr('path', 'match', '.*java.*') | list %}
+          Location: {{ java_file.path }}
+          {% endfor %}
+          {% if java_home.stdout | default('') | length > 0 %}JAVA_HOME: {{ java_home.stdout }}{% endif %}
+          {% else %}
+          No Java found on {{ ansible_hostname }}
+          {% endif %}
+
+    - name: Display final Java summary
+      debug:
+        msg: "{{ java_summary }}"
