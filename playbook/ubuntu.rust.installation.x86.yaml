@@ -1,0 +1,153 @@
+---
+# Ansible playbook to install Rust and Cargo from official installer on Ubuntu systems for non-root users
+#
+# This playbook:
+# 1. Downloads the Rust installation script from the official source
+# 2. Runs the installer to install Rust and Cargo in the specified directory
+# 3. Sets up the environment variables for Rust
+
+- name: Install Rust and Cargo for non-root user
+  hosts: all
+  become: false  # Running as the target user, not root
+  gather_facts: yes
+
+  # Define default values that can be overridden in inventory
+  vars:
+    rust_version: "stable"  # Default Rust version to install (stable, beta, nightly)
+    rust_install_dir: "{{ ansible_env.HOME }}/rust"  # Default installation directory if not specified in inventory
+   
+
+  tasks:
+    - name: Check if rustup config file exists
+      stat:
+        path: "{{ rust_install_dir }}/settings.toml"
+      register: rustup_config_stat
+
+    - name: Check if rustc binary exists
+      stat:
+        path: "{{ rust_install_dir }}/bin/rustc"
+      register: rustc_binary_stat
+
+    - name: Display Rust already installed message and quit
+      debug:
+        msg: "Rust is already installed with rustup in {{ rust_install_dir }}"
+      when: rustup_config_stat.stat.exists or rustc_binary_stat.stat.exists
+
+    - name: Exit playbook if Rust is already installed
+      meta: end_play
+      when: rustup_config_stat.stat.exists or rustc_binary_stat.stat.exists
+
+    - name: Display Rust installation variables
+      debug:
+        msg: |
+          Rust installation parameters:
+          - Version: {{ rust_version }}
+          - Installation directory: {{ rust_install_dir }}
+          - Current user: {{ ansible_user_id }}
+
+    - name: Create temporary directory for Rust installer
+      tempfile:
+        state: directory
+        suffix: rust_installer
+      register: temp_dir
+      become: false
+
+    - name: Download Rust installation script
+      get_url:
+        url: https://sh.rustup.rs
+        dest: "{{ temp_dir.path }}/rustup-init.sh"
+        mode: '0755'
+        force: yes
+
+    - name: Run Rust installer with specified installation directory
+      shell: |
+        export RUSTUP_HOME="{{ rust_install_dir }}"
+        export CARGO_HOME="{{ rust_install_dir }}"
+        bash "{{ temp_dir.path }}/rustup-init.sh" -y --default-toolchain {{ rust_version }} --profile default --no-modify-path
+      become: false
+
+    - name: Add Cargo bin directory to PATH temporarily for rustup commands
+      set_fact:
+        rust_path: "{{ rust_install_dir }}/bin:{{ ansible_env.PATH }}"
+      become: false
+
+    - name: Set default Rust toolchain using rustup from install directory
+      shell: "{{ rust_install_dir }}/bin/rustup default {{ rust_version }}"
+      environment:
+        PATH: "{{ rust_path }}"
+        RUSTUP_HOME: "{{ rust_install_dir }}"
+        CARGO_HOME: "{{ rust_install_dir }}"
+      become: false
+
+    - name: Add Rust environment variables to .bashrc
+      block:
+        - name: Add RUSTUP_HOME to .bashrc
+          lineinfile:
+            dest: "{{ ansible_env.HOME }}/.bashrc"
+            line: 'export RUSTUP_HOME="{{ rust_install_dir }}"'
+            regexp: '^export RUSTUP_HOME='
+            state: present
+            create: yes
+          become: false
+        
+        - name: Add CARGO_HOME to .bashrc
+          lineinfile:
+            dest: "{{ ansible_env.HOME }}/.bashrc"
+            line: 'export CARGO_HOME="{{ rust_install_dir }}"'
+            regexp: '^export CARGO_HOME='
+            state: present
+            create: yes
+          become: false
+
+        - name: Add Cargo bin directory to PATH in .bashrc
+          lineinfile:
+            dest: "{{ ansible_env.HOME }}/.bashrc"
+            line: 'export PATH="$PATH:{{ rust_install_dir }}/bin"'
+            regexp: '^export PATH=.*{{ rust_install_dir }}/bin'
+            state: present
+            create: yes
+          become: false
+
+    - name: Source .bashrc to make changes effective in current session
+      shell: source ~/.bashrc
+      args:
+        executable: /bin/bash
+      become: false
+      ignore_errors: true
+
+    - name: Verify Rust installation
+      shell: "{{ rust_install_dir }}/bin/rustc --version"
+      environment:
+        PATH: "{{ rust_install_dir }}/bin:{{ ansible_env.PATH }}"
+        RUSTUP_HOME: "{{ rust_install_dir }}"
+        CARGO_HOME: "{{ rust_install_dir }}"
+      register: rust_version_output
+      changed_when: false
+      become: false
+
+    - name: Verify Cargo installation
+      shell: "{{ rust_install_dir }}/bin/cargo --version"
+      environment:
+        PATH: "{{ rust_install_dir }}/bin:{{ ansible_env.PATH }}"
+        RUSTUP_HOME: "{{ rust_install_dir }}"
+        CARGO_HOME: "{{ rust_install_dir }}"
+      register: cargo_version_output
+      changed_when: false
+      become: false
+
+    - name: Display Rust and Cargo installation summary
+      debug:
+        msg: |
+          Rust and Cargo installation summary for {{ ansible_hostname }}:
+          - Rust version: {{ rust_version_output.stdout | default('Unknown') }}
+          - Cargo version: {{ cargo_version_output.stdout | default('Unknown') }}
+          - Installation directory: {{ rust_install_dir }}
+          - RUSTUP_HOME: {{ rust_install_dir }}
+          - CARGO_HOME: {{ rust_install_dir }}
+
+    - name: Clean up temporary directory
+      file:
+        path: "{{ temp_dir.path }}"
+        state: absent
+      become: false
+      ignore_errors: true

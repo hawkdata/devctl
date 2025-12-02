@@ -1,0 +1,110 @@
+---
+# Ansible playbook to install Maven from tar package on Ubuntu systems for non-root users
+#
+# This playbook:
+# 1. Copies Maven tar package from controller to remote node
+# 2. Extracts it to the user's directory
+# 3. Sets up the environment variables for Maven
+
+- name: Install Maven for non-root user
+  hosts: all
+  become: false  # Running as the target user, not root
+  gather_facts: yes
+
+  # Define default values that can be overridden in inventory
+  vars:
+    maven_version: "3.9.11"  # Default Maven version to install
+    maven_installer_filename: "apache-maven-{{ maven_version }}-bin.tar.gz"  # Name of Maven installer file
+    maven_local_installer: "{{ package_base_dir  }}/{{ installer_relative_path  }}/{{ maven_installer_filename }}"  # Path to Maven installer on controller, using package_base_dir and installer_relative_path from inventory
+
+  tasks:
+    - name: Check if Maven executable exists in installation directory
+      stat:
+        path: "{{ maven_install_dir }}/apache-maven-{{ maven_version }}/bin/mvn"
+      register: maven_binary_stat
+
+    - name: Display Maven already installed message and quit
+      debug:
+        msg: "Maven is already installed in {{ maven_install_dir }}/apache-maven-{{ maven_version }}/bin/mvn"
+      when: maven_binary_stat.stat.exists
+
+    - name: Exit playbook if Maven is already installed
+      meta: end_play
+      when: maven_binary_stat.stat.exists
+
+    - name: Display Maven installation variables
+      debug:
+        msg: |
+          Maven installation parameters:
+          - Version: {{ maven_version }}
+          - Installation directory: {{ maven_install_dir }}
+          - Installer package: {{ maven_local_installer }}
+          - Temporary directory: {{ tmp_base }}
+          - Current user: {{ ansible_user_id }}
+
+    - name: Create Maven installation directory
+      file:
+        path: "{{ maven_install_dir }}"
+        state: directory
+        mode: '0755'
+      become: false
+
+    - name: Copy Maven tar package from controller to remote node
+      copy:
+        src: "{{ maven_local_installer }}"
+        dest: "{{ tmp_base }}/{{ maven_installer_filename }}"
+        mode: '0644'
+
+    - name: Extract Maven tar package to installation directory
+      unarchive:
+        src: "{{ tmp_base }}/{{ maven_installer_filename }}"
+        dest: "{{ maven_install_dir }}"
+        creates: "{{ maven_install_dir }}/apache-maven-{{ maven_version }}/bin/mvn"
+        remote_src: false
+      become: false
+
+    - name: Ensure the mvn script is executable
+      file:
+        path: "{{ maven_install_dir }}/apache-maven-{{ maven_version }}/bin/mvn"
+        mode: '0755'
+        state: file
+
+    - name: Add MAVEN_HOME environment variable to .bashrc
+      lineinfile:
+        dest: "{{ ansible_env.HOME }}/.bashrc"
+        line: 'export MAVEN_HOME="{{ maven_install_dir }}/apache-maven-{{ maven_version }}"'
+        regexp: '^export MAVEN_HOME='
+        state: present
+        create: yes
+      become: false
+
+    - name: Add MAVEN_HOME/bin to PATH in .bashrc
+      lineinfile:
+        dest: "{{ ansible_env.HOME }}/.bashrc"
+        line: 'export PATH="$PATH:{{ maven_install_dir }}/apache-maven-{{ maven_version }}/bin"'
+        regexp: '^export PATH=.*{{ maven_install_dir }}/apache-maven-{{ maven_version }}/bin'
+        state: present
+        create: yes
+      become: false
+
+    - name: Source .bashrc to make changes effective in current session
+      shell: source ~/.bashrc
+      args:
+        executable: /bin/bash
+      become: false
+      ignore_errors: true
+
+    - name: Verify Maven installation
+      command: "{{ maven_install_dir }}/apache-maven-{{ maven_version }}/bin/mvn -version"
+      register: maven_version_output
+      changed_when: false
+      become: false
+
+    - name: Display Maven installation summary
+      debug:
+        msg: |
+          Maven installation summary for {{ ansible_hostname }}:
+          - Installed version: {{ maven_version_output.stdout | default('Unknown') }}
+          - Installation directory: {{ maven_install_dir }}/apache-maven-{{ maven_version }}
+          - Executable: {{ maven_install_dir }}/apache-maven-{{ maven_version }}/bin/mvn
+          - MAVEN_HOME: {{ maven_install_dir }}/apache-maven-{{ maven_version }}

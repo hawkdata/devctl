@@ -6,6 +6,11 @@ all:
       ansible_ssh_private_key_file: ~/.ssh/id_ed25519 # Optional: path to key
       # SBT installation variable
       sbt_install_dir: "/arena/spacesdev/sbt"
+      #
+      maven_install_dir: "/arena/spacesdev/mvn"
+
+      rust_install_dir: "/arena/spacesdev/rust"  # Default installation directory if not specified in inventory
+
       # 1. Location of the packages directory on your LOCAL machine
       package_base_dir: "/arena/devctl.bz/packages"  # Base directory for packages
 
