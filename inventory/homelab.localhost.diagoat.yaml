@@ -28,4 +28,7 @@ all:
 
       # 6. Base temporary directory on REMOTE server
       tmp_base: "/arena/spacesdev/tmp"  # Base directory for temporary files
+
+      #http_proxy:  "http://192.0.0.1:8080"
+      #https_proxy:  "http://192.0.0.1:8080"
  

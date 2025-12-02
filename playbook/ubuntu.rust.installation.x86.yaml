@@ -58,11 +58,20 @@
         dest: "{{ temp_dir.path }}/rustup-init.sh"
         mode: '0755'
         force: yes
+      environment:
+        HTTP_PROXY: "{{ http_proxy | default('') }}"
+        HTTPS_PROXY: "{{ https_proxy | default('') }}"
+        http_proxy: "{{ http_proxy | default('') }}"
+        https_proxy: "{{ https_proxy | default('') }}"
 
     - name: Run Rust installer with specified installation directory
       shell: |
         export RUSTUP_HOME="{{ rust_install_dir }}"
         export CARGO_HOME="{{ rust_install_dir }}"
+        export HTTP_PROXY="{{ http_proxy | default('') }}"
+        export HTTPS_PROXY="{{ https_proxy | default('') }}"
+        export http_proxy="{{ http_proxy | default('') }}"
+        export https_proxy="{{ https_proxy | default('') }}"
         bash "{{ temp_dir.path }}/rustup-init.sh" -y --default-toolchain {{ rust_version }} --profile default --no-modify-path
       become: false
 
